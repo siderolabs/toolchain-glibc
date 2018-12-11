@@ -842,6 +842,12 @@ ENV PATH /sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin:${TOOLCHAI
 RUN [ "/toolchain/bin/mkdir", "/bin" ]
 RUN [ "/toolchain/bin/ln", "-s", "/toolchain/bin/bash", "/bin/sh" ]
 RUN [ "/toolchain/bin/ln", "-s", "/toolchain/bin/bash", "/bin/bash" ]
+RUN mkdir -p /tmp
+RUN mkdir -p /usr
+RUN ln -s /toolchain/lib /lib
+RUN ln -s /toolchain/lib /usr/lib
+RUN ln -s /lib /lib64
+RUN ln -s /lib /usr/lib64
 RUN mkdir ${SRC}
 RUN mkdir ${TOOLCHAIN}/go
 RUN curl --retry 5 --retry-delay 0 --retry-max-time 45 -L https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.19.1.tar.xz -o ${SRC}/linux.tar.xz
