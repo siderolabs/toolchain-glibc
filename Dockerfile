@@ -818,6 +818,8 @@ RUN grep 'SEARCH.*/usr/lib' dummy.log |sed 's|; |\n|g'
 RUN grep "/lib.*/libc.so.6 " dummy.log
 RUN grep found dummy.log
 RUN rm -v dummy.c a.out dummy.log
+WORKDIR /
+RUN rm -rf ${SRC}/*
 
 # cleanup
 
