@@ -78,7 +78,7 @@ RUN make install-strip
 # linux headers
 
 WORKDIR ${SRC}/linux-headers
-RUN ${CURL} https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.19.1.tar.xz | tar --strip-components=1 -xJ
+RUN ${CURL} https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.19.10.tar.xz | tar --strip-components=1 -xJ
 RUN make mrproper
 RUN make INSTALL_HDR_PATH=dest headers_install
 RUN cp -rv dest/include/* ${TOOLCHAIN}/include
@@ -850,4 +850,4 @@ RUN ln -s /lib /lib64
 RUN ln -s /lib /usr/lib64
 RUN mkdir ${SRC}
 RUN mkdir ${TOOLCHAIN}/go
-RUN curl --retry 5 --retry-delay 0 --retry-max-time 45 -L https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.19.1.tar.xz -o ${SRC}/linux.tar.xz
+RUN curl --retry 5 --retry-delay 0 --retry-max-time 45 -L https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.19.10.tar.xz -o ${SRC}/linux.tar.xz
