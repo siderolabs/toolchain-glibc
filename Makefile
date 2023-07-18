@@ -1,54 +1,65 @@
-REPO_BASE ?= docker.io/autonomy
-EXECUTOR ?= gcr.io/kaniko-project/executor
-EXECUTOR_TAG ?= latest
-# AUTH_CONFIG ?= $(HOME)/.kaniko/config.json
+REGISTRY ?= ghcr.io
+USERNAME ?= siderolabs
+SHA ?= $(shell git describe --match=none --always --abbrev=8 --dirty)
+TAG ?= $(shell git describe --tag --always --dirty)
+BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+REGISTRY_AND_USERNAME := $(REGISTRY)/$(USERNAME)
+# inital commit time
+# git rev-list --max-parents=0 HEAD
+# git log fe7c7c8702ec051adc6a6b6620ecd2cb899dd34d --pretty=%ct
+SOURCE_DATE_EPOCH ?= "1543533531"
 
-BASE_IMAGE ?= debian:buster-20180213
+# Sync bldr image with Pkgfile
+BLDR_IMAGE := 127.0.0.1:5010/frezbo/bldr:v0.2.0-1-g5281da5-dirty
+BLDR ?= docker run --pull=always --rm --volume $(PWD):/toolchain --entrypoint=/bldr \
+	$(BLDR_IMAGE) --root=/toolchain
 
-SHA := $(shell gitmeta git sha)
-TAG := $(shell gitmeta image tag)
-BUILT := $(shell gitmeta built)
-NO_PUSH ?= $(shell gitmeta image pushable --negate)
+BUILD := docker buildx build
+PLATFORM ?= linux/amd64,linux/arm64
+PROGRESS ?= auto
+PUSH ?= false
+DEST ?= _out
+COMMON_ARGS := --file=Pkgfile
+COMMON_ARGS += --provenance=false
+COMMON_ARGS += --progress=$(PROGRESS)
+COMMON_ARGS += --platform=$(PLATFORM)
+COMMON_ARGS += --build-arg=SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH)
 
-ifndef S3_BUCKET
-$(error S3_BUCKET is required)
-endif
+TARGETS = toolchain-glibc
 
-TARBALL := $(SHA)-context.tar.gz
-CONTEXT := s3://$(S3_BUCKET)/$(TARBALL)
+all: $(TARGETS) ## Builds the toolchain.
 
-all: enforce toolchain
+.PHONY: help
+help: ## This help menu.
+	@grep -E '^[a-zA-Z0-9\.%_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-enforce:
-	@conform enforce
+target-%: ## Builds the specified target defined in the Pkgfile. The build result will only remain in the build cache.
+	@$(BUILD) \
+		--target=$* \
+		$(COMMON_ARGS) \
+		$(TARGET_ARGS) .
 
-.PHONY: context
-context:
-	@tar -C ./context -zcvf $(TARBALL) .
-	@aws s3 cp $(TARBALL) $(CONTEXT)
+local-%: ## Builds the specified target defined in the Pkgfile using the local output type. The build result will be output to the specified local destination.
+	@$(MAKE) target-$* TARGET_ARGS="--output=type=local,dest=$(DEST) $(TARGET_ARGS)"
 
-toolchain: context
-	@docker run \
-		--rm \
-		$(EXECUTOR):$(EXECUTOR_TAG) \
-			--cache=false \
-			--cleanup \
-			--dockerfile=Dockerfile \
-			--destination=$(REPO_BASE)/$@:$(TAG) \
-			--single-snapshot \
-			--no-push=$(NO_PUSH) \
-			--context=$(CONTEXT) \
-			--build-arg BASE_IMAGE=$(BASE_IMAGE)
+reproducibility-test:
+	@$(MAKE) reproducibility-test-local-toolchain-glibc
 
-debug:
-	docker run \
-		--rm \
-		-it \
-		$(EXECUTOR_VOLUMES) \
-		--volume $(PWD):/workspace \
-		--entrypoint=/busybox/sh \
-		$(EXECUTOR):debug
+reproducibility-test-local-%: ## Builds the specified target defined in the Pkgfile using the local output type. The build result will be output to the specified local destination.
+	@rm -rf _out1/ _out2/
+	@$(MAKE) local-$* DEST=_out1
+	@$(MAKE) local-$* DEST=_out2 TARGET_ARGS="--no-cache"
+	@touch -ch -t $$(date -d @$(SOURCE_DATE_EPOCH) +%Y%m%d0000) _out1 _out2
+	@diffoscope _out1 _out2
+	@rm -rf _out1/ _out2/
 
-deps:
-	@GO111MODULES=on CGO_ENABLED=0 go get -u github.com/autonomy/gitmeta
-	@GO111MODULES=on CGO_ENABLED=0 go get -u github.com/autonomy/conform
+docker-%: ## Builds the specified target defined in the Pkgfile using the docker output type. The build result will be loaded into Docker.
+	@$(MAKE) target-$* TARGET_ARGS="$(TARGET_ARGS)"
+
+.PHONY: $(TARGETS)
+$(TARGETS):
+	@$(MAKE) docker-$@ TARGET_ARGS="--tag=$(REGISTRY_AND_USERNAME)/$@:$(TAG) --push=$(PUSH)"
+
+.PHONY: deps.png
+deps.png: ## Regenerate deps.png.
+	@$(BLDR) graph | dot -Tpng > deps.png

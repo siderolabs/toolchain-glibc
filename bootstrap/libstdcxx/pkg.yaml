@@ -1,0 +1,42 @@
+name: bootstrap-libstdcxx
+variant: debian
+install:
+  - make
+  - xz-utils
+dependencies:
+  - stage: bootstrap-gcc
+steps:
+  - sources:
+      - url: https://ftp.gnu.org/gnu/gcc/gcc-{{ .gcc_version }}/gcc-{{ .gcc_version }}.tar.xz
+        destination: gcc.tar.xz
+        sha256: "{{ .gcc_sha256 }}"
+        sha512: "{{ .gcc_sha512 }}"
+    env:
+      PATH: "{{ .BOOTSTRAP }}/bin:{{ .PATH }}"
+    prepare:
+      - |
+        tar -xJf gcc.tar.xz --strip-components=1
+
+        mkdir build
+        cd build
+
+        # --host=${HOST} \
+
+        ../libstdc++-v3/configure \
+        --prefix={{ .BOOTSTRAP }} \
+        --with-gxx-include-dir={{ .BOOTSTRAP }}/include/c++/{{ .gcc_version }} \
+        --disable-multilib \
+        --disable-nls \
+        --disable-libstdcxx-threads \
+        --disable-libstdcxx-pch
+    build:
+      - |
+        cd build
+        make  -j $(nproc)
+    install:
+      - |
+        cd build
+        make install
+finalize:
+  - from: "{{ .BOOTSTRAP }}"
+    to: "{{ .BOOTSTRAP }}"
