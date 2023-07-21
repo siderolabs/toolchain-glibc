@@ -1,0 +1,25 @@
+name: toolchain-glibc
+dependencies:
+  - stage: binutils
+  - stage: gcc
+  - stage: linux-headers
+  - stage: glibc
+steps:
+  - env:
+      PATH: "{{ .TOOLCHAIN }}/bin:{{ .PATH }}"
+    test:
+      - |
+        # we need to make sure nothing from the bootstrap toolchain is used
+        {{ .TOOLCHAIN }}/lib64/ld-linux-x86-64.so.2 --list /toolchain/bin/gcc | grep -v "/bootstrap"
+
+        echo 'int main(){}' > dummy.c
+
+        # make sure we can execute a simple program
+        gcc -o dummy dummy.c
+        ./dummy
+
+        gcc dummy.c
+        readelf -l a.out | grep ": ${TOOLCHAIN}"
+finalize:
+  - from: "{{ .TOOLCHAIN }}"
+    to: "{{ .TOOLCHAIN }}"

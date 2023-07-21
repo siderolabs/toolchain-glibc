@@ -1,0 +1,49 @@
+name: bootstrap-glibc
+variant: debian
+install:
+  - make
+  - gawk
+  - bison
+  - python3
+  - build-essential
+dependencies:
+  - stage: bootstrap-linux-headers
+  - stage: bootstrap-binutils
+steps:
+  - sources:
+      - url: https://ftpmirror.gnu.org/libc/glibc-{{ .glibc_version }}.tar.gz
+        destination: glibc.tar.gz
+        sha256: {{ .glibc_sha256 }}
+        sha512: {{ .glibc_sha512 }}
+    env:
+      PATH: "{{ .BOOTSTRAP }}/bin:{{ .PATH }}"
+    prepare:
+      - |
+        tar -xzf glibc.tar.gz --strip-components=1
+
+        mkdir build
+        cd build
+
+        ../configure \
+          --prefix={{ .BOOTSTRAP }} \
+          --libdir={{ .BOOTSTRAP }}/lib \
+          --libexecdir={{ .BOOTSTRAP }}/lib \
+          --with-headers={{ .BOOTSTRAP }}/include \
+          --enable-stack-protection=strong \
+          --disable-werror
+    build:
+      - |
+        cd build
+        make -j $(nproc)
+    install:
+      - |
+        cd build
+        make install
+
+        mkdir -p {{ .BOOTSTRAP }}/lib64
+        ln -s {{ .BOOTSTRAP }}/lib/ld-linux-x86-64.so.2 {{ .BOOTSTRAP }}/lib64/ld-linux-x86-64.so.2
+
+        cp /pkg/ld.so.conf {{ .BOOTSTRAP }}/etc/ld.so.conf
+finalize:
+  - from: "{{ .BOOTSTRAP }}"
+    to: "{{ .BOOTSTRAP }}"

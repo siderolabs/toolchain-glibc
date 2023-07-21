@@ -1,0 +1,35 @@
+name: bootstrap-binutils
+variant: debian
+install:
+  - build-essential
+  - texinfo
+steps:
+  - sources:
+      - url: https://ftp.gnu.org/gnu/binutils/binutils-{{ .binutils_version | replace "_" "." }}.tar.xz
+        destination: binutils.tar.xz
+        sha256: "{{ .binutils_sha256 }}"
+        sha512: "{{ .binutils_sha512 }}"
+    prepare:
+      - |
+        # --build=${BUILD} \
+        #   --host=${HOST} \
+        tar -xJf binutils.tar.xz --strip-components=1
+        mkdir build
+        cd build
+        ../configure \
+        --prefix={{ .BOOTSTRAP }} \
+        --disable-nls \
+        --disable-gprofng \
+        --disable-werror \
+        --enable-deterministic-archives
+    build:
+      - |
+        cd build
+        make -j $(nproc)
+    install:
+      - |
+        cd build
+        make install
+finalize:
+  - from: "{{ .BOOTSTRAP }}"
+    to: "{{ .BOOTSTRAP }}"

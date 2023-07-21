@@ -1,0 +1,55 @@
+name: glibc
+variant: debian
+install:
+  - make
+  - gawk
+  - bison
+  - python3
+dependencies:
+  - stage: bootstrap-gcc
+  - stage: linux-headers
+steps:
+  - sources:
+      - url: https://ftpmirror.gnu.org/libc/glibc-{{ .glibc_version }}.tar.gz
+        destination: glibc.tar.gz
+        sha256: {{ .glibc_sha256 }}
+        sha512: {{ .glibc_sha512 }}
+    env:
+      PATH: "{{ .BOOTSTRAP }}/bin:{{ .PATH }}"
+    prepare:
+      - |
+        tar -xzf glibc.tar.gz --strip-components=1
+
+        mkdir build
+        cd build
+
+        ../configure \
+          --prefix=${TOOLCHAIN} \
+          --libdir=${TOOLCHAIN}/lib \
+          --libexecdir=${TOOLCHAIN}/lib \
+          --with-headers=${TOOLCHAIN}/include \
+          --enable-stack-protection=strong \
+          --disable-werror
+    build:
+      - |
+        cd build
+        make -j $(nproc)
+    install:
+      - |
+        cd build
+        make install
+
+        mkdir -p {{ .TOOLCHAIN }}/lib64
+        ln -sfv {{ .TOOLCHAIN }}/lib/ld-linux-x86-64.so.2 {{ .TOOLCHAIN }}/lib64/ld-linux-x86-64.so.2
+
+        cp /pkg/ld.so.conf ${TOOLCHAIN}/etc/ld.so.conf
+
+        # generate a list of files in `/lib` that glibc creates so that we can copy it over in adjust.sh in tools
+        # first install to a different DESTDIR so that we have a clean list of files
+        make install DESTDIR=/tmp/glibc
+
+        mkdir -p {{ .TOOLCHAIN }}/var/glibc
+        find /tmp/glibc/toolchain/lib/ -type f | sed 's|/tmp/glibc/toolchain/lib/||g' > {{ .TOOLCHAIN }}/var/glibc/libs.txt
+finalize:
+  - from: "{{ .TOOLCHAIN }}"
+    to: "{{ .TOOLCHAIN }}"
